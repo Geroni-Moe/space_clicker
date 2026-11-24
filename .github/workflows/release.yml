@@ -1,0 +1,100 @@
+# Builds Void Armada for macOS, Windows and Linux.
+# - Every push to main and every pull request: lint, test, and build all three
+#   (the builds are kept as workflow artifacts for a week).
+# - A pushed tag like v0.2.0: the same, then a GitHub Release with the three
+#   downloads attached. The tag must match the version in Cargo.toml.
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  LINUX_DEPS: pkg-config libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+
+jobs:
+  check:
+    name: Lint and test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
+      - run: rustup component add clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            bundle: |
+              scripts/bundle_macos.sh --universal
+              ditto -c -k --keepParent "dist/Void Armada.app" dist/VoidArmada-macos.zip
+            file: dist/VoidArmada-macos.zip
+          - name: Windows
+            # cross-compiled with MinGW, the same way as a local build
+            os: ubuntu-22.04
+            bundle: |
+              sudo apt-get update && sudo apt-get install -y mingw-w64 zip
+              rustup target add x86_64-pc-windows-gnu
+              scripts/bundle_windows.sh
+            file: dist/VoidArmada-windows.zip
+          - name: Linux
+            # the oldest supported runner, so the binary runs on older distros' glibc
+            os: ubuntu-22.04
+            bundle: |
+              sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
+              scripts/bundle_linux.sh
+            file: dist/VoidArmada-linux-x86_64.tar.gz
+    steps:
+      - uses: actions/checkout@v5
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.name }}
+      - name: Bundle
+        run: ${{ matrix.bundle }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.file }}
+          retention-days: 7
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag matches Cargo.toml version
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $VERSION"
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "Void Armada $GITHUB_REF_NAME" \
+            --generate-notes

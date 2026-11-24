@@ -1,16 +1,28 @@
 #!/bin/sh
 # Build a release "Void Armada.app" in dist/: the binary in Contents/MacOS,
-# the game's assets in Contents/Resources, and the app icon. Unsigned; for
-# running locally. Usage: scripts/bundle_macos.sh
+# the game's assets in Contents/Resources, and the app icon. Ad-hoc signed
+# only (no Apple Developer ID).
+# Usage: scripts/bundle_macos.sh [--universal]
+#   --universal  one binary for both Apple Silicon and Intel Macs (for releases)
 set -eu
 cd "$(dirname "$0")/.."
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 scripts/make_icns.sh
-cargo build --release
 APP="dist/Void Armada.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp target/release/void_armada "$APP/Contents/MacOS/void_armada"
+if [ "${1:-}" = "--universal" ]; then
+  rustup target add aarch64-apple-darwin x86_64-apple-darwin
+  cargo build --release --target aarch64-apple-darwin
+  cargo build --release --target x86_64-apple-darwin
+  lipo -create -output "$APP/Contents/MacOS/void_armada" \
+    target/aarch64-apple-darwin/release/void_armada \
+    target/x86_64-apple-darwin/release/void_armada
+else
+  cargo build --release
+  cp target/release/void_armada "$APP/Contents/MacOS/void_armada"
+fi
+cp LICENSE "$APP/Contents/Resources/LICENSE"
 cp -R assets "$APP/Contents/Resources/assets"
 cp assets/icon/VoidArmada.icns "$APP/Contents/Resources/VoidArmada.icns"
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -34,4 +46,6 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+# seal the whole bundle; Apple Silicon refuses to run an unsigned binary
+codesign --force --deep --sign - "$APP"
 echo "built $APP"

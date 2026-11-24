@@ -5,7 +5,37 @@ flagship, click to fire its targeting laser, and grow an armada of up to 45
 escorts across 9 hull classes while pushing through endless sectors of
 escalating enemy fleets.
 
-## Run
+## Download
+
+Get the latest build for your system from the
+[Releases page](https://github.com/Geroni-Moe/space_clicker/releases/latest).
+
+- **macOS** (Apple Silicon and Intel, macOS 11+): unzip
+  `VoidArmada-macos.zip` and move **Void Armada** to Applications. The app
+  is not notarized by Apple, so the first launch is blocked: open it once,
+  then go to **System Settings > Privacy & Security** and click
+  **Open Anyway**.
+- **Windows** (64-bit): unzip `VoidArmada-windows.zip` and run
+  `VoidArmada.exe`. If SmartScreen warns about an unrecognized app, click
+  **More info > Run anyway**.
+- **Linux** (x86_64): extract `VoidArmada-linux-x86_64.tar.gz` and run
+  `./void_armada`. Needs Vulkan graphics drivers and ALSA (`libasound2`),
+  which most desktop distros already have.
+
+Keep the `assets` folder next to the game; it holds the sprites, sounds and
+fonts.
+
+### Publishing a release
+
+Bump `version` in `Cargo.toml`, commit, then tag and push:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+GitHub Actions builds all three platforms and publishes the release.
+
+## Build from source
 
 ```sh
 cargo run --release
