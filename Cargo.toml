@@ -20,6 +20,8 @@ opt-level = 3
 [profile.release]
 codegen-units = 1
 lto = "thin"
+# drop debug info from shipped binaries (function names stay for backtraces)
+strip = "debuginfo"
 
 # dock icon for dev runs (an app bundle uses its .icns); same versions winit already pulls in
 [target.'cfg(target_os = "macos")'.dependencies]
